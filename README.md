@@ -23,7 +23,13 @@ This skill wraps [TikSpyder](https://github.com/estebanpdl/tik-spyder), an OSINT
 
 ## Installation
 
-### Option 1: Clone as a plugin (recommended)
+### Option 1: Install using `npx`
+
+```
+npx skills add https://github.com/estebanpdl/tikspyder-agent-skill --skill tikspyder
+```
+
+### Option 2: Clone as a plugin
 
 ```bash
 # User-level (available across all your projects)
@@ -31,14 +37,6 @@ git clone https://github.com/estebanpdl/tikspyder-agent-skill.git ~/.claude/plug
 
 # Or project-level (available only in one project)
 git clone https://github.com/estebanpdl/tikspyder-agent-skill.git .claude/plugins/tikspyder-agent-skill
-```
-
-### Option 2: Install from a marketplace
-
-If a marketplace has this plugin listed:
-
-```
-/plugin install tikspyder-agent-skill@<marketplace-name>
 ```
 
 Restart Claude Code after installing. The skill will be available immediately.

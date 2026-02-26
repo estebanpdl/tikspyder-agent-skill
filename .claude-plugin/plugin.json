@@ -1,0 +1,13 @@
+{
+  "name": "tikspyder-agent-skill",
+  "version": "0.1.0",
+  "description": "Guided TikTok data collection through conversation using TikSpyder",
+  "author": {
+    "name": "Esteban Ponce de Leon",
+    "url": "https://github.com/estebanpdl"
+  },
+  "repository": "https://github.com/estebanpdl/tikspyder-agent-skill",
+  "license": "MIT",
+  "keywords": ["osint", "tiktok", "data-collection", "tikspyder", "serpapi", "apify"],
+  "skills": "./skills/"
+}

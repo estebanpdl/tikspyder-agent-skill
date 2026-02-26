@@ -93,17 +93,20 @@ TikSpyder needs Python 3.11 or newer. If the version is too old, tell the user a
 
 If tikspyder is already installed (found in Step A or B), skip this entirely.
 
-Otherwise, create an environment and install. Prefer conda/mamba if available on the system (since the user may already use it for other tools), otherwise fall back to venv:
-
-**Option 1 — conda/mamba (preferred if available):**
+Otherwise, create an environment and install. First check whether conda/mamba is available:
 
 ```bash
-conda create -n tikspyder python=3.11 -y
-conda activate tikspyder
+conda --version 2>/dev/null || mamba --version 2>/dev/null
+```
+
+**If conda/mamba IS available**, use it:
+
+```bash
+eval "$(conda shell.bash hook)" && conda create -n tikspyder python=3.11 -y && conda activate tikspyder
 cd "$TIKSPYDER_DIR" && pip install -e .
 ```
 
-**Option 2 — venv (fallback):**
+**If conda/mamba is NOT available**, fall back to Python's built-in venv. This is perfectly fine — venv ships with Python and needs no extra installation:
 
 ```bash
 cd "$TIKSPYDER_DIR"
@@ -126,11 +129,13 @@ Then install:
 cd "$TIKSPYDER_DIR" && pip install -e .
 ```
 
-Verify it works:
+Verify it works regardless of which environment type was created:
 
 ```bash
 tikspyder --help
 ```
+
+Tell the user which environment type was set up (conda or venv) so they know for future reference.
 
 ### 1.6 Check ffmpeg
 

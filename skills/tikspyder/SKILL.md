@@ -1,11 +1,11 @@
 ---
 name: tikspyder
-description: Run the TikSpyder OSINT tool to collect TikTok data — search by keyword, username, or hashtag, download videos, extract keyframes, and export structured data. Use this skill whenever the user wants to collect TikTok data, scrape TikTok profiles or hashtags, search TikTok videos, download TikTok content, run tikspyder, or launch the TikSpyder Streamlit interface. Also trigger when the user mentions OSINT data collection from TikTok, even if they don't say "tikspyder" by name.
+description: > Run the TikSpyder tool to collect TikTok data — search by keyword, username, or hashtag, download videos, extract keyframes, and export structured data. Use this skill whenever the user wants to collect TikTok data, search TikTok profiles or hashtags, search TikTok videos, download TikTok content, run tikspyder, or launch the TikSpyder Streamlit interface. Also trigger when the user mentions data collection from TikTok, even if they don't say "tikspyder" by name.
 ---
 
 # TikSpyder — Guided TikTok Data Collection
 
-You are guiding a user (who may not be technical) through collecting TikTok data using TikSpyder, a command-line OSINT tool. Your job is to set up the environment, configure credentials, gather search parameters conversationally, run the tool, and summarize results.
+You are guiding a user (who may not be technical) through collecting TikTok data using TikSpyder, an open-source data collection tool. Your job is to set up the environment, configure credentials, gather search parameters conversationally, run the tool, and summarize results.
 
 Throughout this process, communicate clearly and explain what you're doing at each step. If something fails, explain the error in plain language and suggest a fix.
 
@@ -13,17 +13,26 @@ Throughout this process, communicate clearly and explain what you're doing at ea
 
 ## Phase 1: Locate TikSpyder & Environment Check
 
-Before anything else, you need to find (or install) TikSpyder and verify the environment is ready. Work through these steps in order and track two key variables:
+Before anything else, find (or install) TikSpyder and verify the environment is ready. Work through these steps in order and track two key variables:
 
 - **TIKSPYDER_DIR** — the root of the TikSpyder source repo (contains `main.py`, `config/`, etc.)
 - **SKILL_DIR** — the directory where this skill file lives
 
-### 1.1 Find the skill directory
+### Conda activation note
 
-The skill directory contains this SKILL.md file. Search for it:
+Throughout this skill, whenever you need to activate a conda environment in a bash command, you must initialize the shell hook first. The pattern is:
 
 ```bash
-# Check project-level and user-level skill locations
+conda_init="eval \"\$(conda shell.bash hook)\"" && $conda_init && conda activate tikspyder
+```
+
+Bare `conda activate` will fail in non-interactive shells. Always use the full pattern above. This applies to Phase 1, Phase 4, and Phase 5.
+
+### 1.1 Find the skill directory
+
+The skill directory contains this SKILL.md file. Search for it in standard locations:
+
+```bash
 for candidate in .claude/skills/tikspyder "$HOME/.claude/skills/tikspyder"; do
   if [ -f "$candidate/SKILL.md" ]; then
     echo "SKILL_DIR=$candidate"
@@ -46,21 +55,13 @@ pip show tikspyder 2>&1
 
 If found, extract `Location:` and verify `main.py` exists there. Set TIKSPYDER_DIR accordingly.
 
-**Step B — Check for conda/mamba environment named `tikspyder`:**
+**Step B — Check for a conda/mamba environment named `tikspyder`:**
 
 ```bash
 conda env list 2>/dev/null | grep tikspyder
 ```
 
-If a `tikspyder` environment exists, activate it and check again. **Important:** In non-interactive shells (which is what you're running), `conda activate` won't work directly — you must initialize the shell hook first:
-
-```bash
-eval "$(conda shell.bash hook)" && conda activate tikspyder && pip show tikspyder 2>&1
-```
-
-Always use `eval "$(conda shell.bash hook)" && conda activate tikspyder` as the activation pattern — never bare `conda activate`. This applies everywhere in this skill: Phase 1, Phase 4, Phase 5.
-
-If you find tikspyder in a conda env, use that environment for all subsequent commands. Remember to activate it (with the shell hook) before running tikspyder in Phase 4.
+If a `tikspyder` environment exists, activate it (using the conda pattern from above) and run `pip show tikspyder` again. If found, use that environment for all subsequent commands.
 
 **Step C — Check if repo is already cloned in the skill directory:**
 
@@ -70,9 +71,9 @@ ls "$SKILL_DIR/tik-spyder/main.py" 2>/dev/null
 
 If found, set `TIKSPYDER_DIR=$SKILL_DIR/tik-spyder`.
 
-### 1.3 Clone and install if needed
+### 1.3 Download and install if needed
 
-If TikSpyder isn't found by any of the checks above, clone it from GitHub into the skill directory:
+If TikSpyder isn't found by any of the checks above, download the official repository from GitHub into the skill directory:
 
 ```bash
 cd "$SKILL_DIR"
@@ -99,14 +100,9 @@ Otherwise, create an environment and install. First check whether conda/mamba is
 conda --version 2>/dev/null || mamba --version 2>/dev/null
 ```
 
-**If conda/mamba IS available**, use it:
+**If conda/mamba is available**, create a dedicated environment, activate it (using the conda pattern), and install TikSpyder from the cloned repository with `pip install -e .` inside TIKSPYDER_DIR.
 
-```bash
-eval "$(conda shell.bash hook)" && conda create -n tikspyder python=3.11 -y && conda activate tikspyder
-cd "$TIKSPYDER_DIR" && pip install -e .
-```
-
-**If conda/mamba is NOT available**, fall back to Python's built-in venv. This is perfectly fine — venv ships with Python and needs no extra installation:
+**If conda/mamba is not available**, use Python's built-in venv:
 
 ```bash
 cd "$TIKSPYDER_DIR"
@@ -114,20 +110,10 @@ python -m venv .venv
 ```
 
 Activate — the path differs by platform:
+- **Windows (Git Bash):** `source "$TIKSPYDER_DIR/.venv/Scripts/activate"`
+- **macOS / Linux:** `source "$TIKSPYDER_DIR/.venv/bin/activate"`
 
-```bash
-if [ -f "$TIKSPYDER_DIR/.venv/Scripts/activate" ]; then
-  source "$TIKSPYDER_DIR/.venv/Scripts/activate"
-else
-  source "$TIKSPYDER_DIR/.venv/bin/activate"
-fi
-```
-
-Then install:
-
-```bash
-cd "$TIKSPYDER_DIR" && pip install -e .
-```
+Then install with `pip install -e .` inside TIKSPYDER_DIR.
 
 Verify it works regardless of which environment type was created:
 
@@ -173,9 +159,9 @@ If any critical requirement is missing (Python too old, tikspyder failed to inst
 TikSpyder uses two external APIs:
 
 - **SerpAPI** — powers Google-based TikTok search (Google search results + Google Images thumbnails)
-- **Apify** — powers direct TikTok profile and hashtag scraping
+- **Apify** — powers direct TikTok profile and hashtag data collection
 
-**Important:** TikSpyder runs SerpAPI calls in ALL modes — even `--user` and `--tag` modes trigger Google search and Google Images calls before the Apify scrape. Without a valid SerpAPI key, those calls will fail with 401 errors. The Apify scrape will still work, but data collection will be incomplete. For best results, configure both keys regardless of which search mode the user plans to use.
+**Important:** TikSpyder runs SerpAPI calls in ALL modes — even `--user` and `--tag` modes trigger Google search and Google Images calls before the Apify step. Without a valid SerpAPI key, those calls will fail with 401 errors. The Apify step will still work, but data collection will be incomplete. For best results, configure both keys regardless of which search mode the user plans to use.
 
 ### 2.1 Check existing keys
 
@@ -199,11 +185,11 @@ If either key is invalid, ask the user for it. Ask for ALL missing keys at once 
 Explain what each API is for:
 
 - "**SerpAPI key** — This lets TikSpyder search Google for TikTok content. You can get one at https://serpapi.com/ (they have a free tier)."
-- "**Apify token** — This lets TikSpyder scrape TikTok profiles and hashtags directly. You can get one at https://apify.com/ (they have a free tier). Required for user profile and hashtag searches."
+- "**Apify token** — This lets TikSpyder collect TikTok profiles and hashtags directly. You can get one at https://apify.com/ (they have a free tier). Required for user profile and hashtag searches."
 
 If the user can only provide one key, that's OK — explain what will and won't work:
 - SerpAPI only: keyword searches work fully; user/hashtag modes will fail
-- Apify only: user/hashtag scraping works but Google search/images steps will show 401 errors (data collection still succeeds via Apify, just with incomplete results)
+- Apify only: user/hashtag collection works but Google search/images steps will show 401 errors (data collection still succeeds via Apify, just with incomplete results)
 
 ### 2.3 Save keys
 
@@ -232,8 +218,8 @@ Ask: "What would you like to search for?"
 | Mode | CLI flag | Notes |
 |------|----------|-------|
 | Keyword search | `--q "term"` | Searches Google for TikTok results matching the term |
-| User profile | `--user username` | Scrapes a specific TikTok user's videos (requires `--apify`) |
-| Hashtag | `--tag hashtag` | Scrapes videos with a specific hashtag (requires `--apify`) |
+| User profile | `--user username` | Collects a specific TikTok user's videos (requires `--apify`) |
+| Hashtag | `--tag hashtag` | Collects videos with a specific hashtag (requires `--apify`) |
 
 If the user picks user or hashtag mode, the `--apify` flag is automatically required — add it without asking.
 
@@ -257,14 +243,13 @@ After knowing the search mode, ask about these options. You don't need to ask ab
 - Download videos? (`--download`) — "Do you want to download the actual video files?"
 - Output directory (`--output`) — "Where should I save the results? Default creates a timestamped folder in `./tikspyder-data/`."
 - Worker threads (`--max-workers`) — Only mention if the user seems technical or asks about speed. Default is 5 for downloads, 3 for keyframes.
-- Tor (`--use-tor`) — Only mention if privacy is relevant. Requires Tor service running locally.
 
 ### 3.3 Date synchronization (critical)
 
 TikSpyder uses **two separate date filtering systems** that operate independently:
 
 - **SerpAPI dates** (`--after` / `--before`) — filter the Google search results
-- **Apify dates** (`--oldest-post-date` / `--newest-post-date`) — filter the Apify scraper results
+- **Apify dates** (`--oldest-post-date` / `--newest-post-date`) — filter the Apify results
 
 When the user specifies any date range, you MUST set the corresponding flags for BOTH systems. Otherwise one API returns filtered results while the other returns everything, mixing date-filtered and unfiltered data.
 
@@ -279,7 +264,7 @@ When the user specifies any date range, you MUST set the corresponding flags for
 --after 2026-01-01 --oldest-post-date 2026-01-01
 ```
 
-This applies to all search modes — keyword, user, and hashtag. Even though `--after`/`--before` are SerpAPI flags and `--oldest-post-date`/`--newest-post-date` are Apify flags, always include both when dates are specified.
+This applies to all search modes — keyword, user, and hashtag.
 
 ### 3.4 Confirm before running
 
@@ -302,47 +287,30 @@ Ask for confirmation before proceeding.
 
 ### 4.1 Activate environment if needed
 
-Reactivate the same environment that was discovered/created in Phase 1. Use whichever applies:
-
-**conda/mamba** (always use the shell hook pattern):
-```bash
-eval "$(conda shell.bash hook)" && conda activate tikspyder
-```
-
-**venv:**
-```bash
-if [ -f "$TIKSPYDER_DIR/.venv/Scripts/activate" ]; then
-  source "$TIKSPYDER_DIR/.venv/Scripts/activate"
-elif [ -f "$TIKSPYDER_DIR/.venv/bin/activate" ]; then
-  source "$TIKSPYDER_DIR/.venv/bin/activate"
-fi
-```
-
-Remember which environment type was used in Phase 1 and reuse the same activation here.
+Reactivate the same environment that was discovered/created in Phase 1. If using conda, use the conda activation pattern from the top of this document. If using venv, source the activate script (Windows: `.venv/Scripts/activate`, macOS/Linux: `.venv/bin/activate`).
 
 ### 4.2 Build and run the command
 
 Construct the tikspyder CLI command from the collected parameters. Always `cd` into TIKSPYDER_DIR first so the config file is found correctly.
 
-Example commands (showing conda activation — adapt if using venv):
+Example commands:
 
 ```bash
 # Keyword search with date filter
-eval "$(conda shell.bash hook)" && conda activate tikspyder && \
-  cd "$TIKSPYDER_DIR" && tikspyder --q "search term" --gl us --hl en \
+cd "$TIKSPYDER_DIR" && tikspyder --q "search term" --gl us --hl en \
   --after 2025-01-01 --before 2025-06-01 --output ./data/ --download
 
 # User profile with date filter (note: BOTH --after AND --oldest-post-date)
-eval "$(conda shell.bash hook)" && conda activate tikspyder && \
-  cd "$TIKSPYDER_DIR" && tikspyder --user username --apify \
+cd "$TIKSPYDER_DIR" && tikspyder --user username --apify \
   --after 2025-01-01 --oldest-post-date 2025-01-01 --output ./data/
 
 # Hashtag with date filter
-eval "$(conda shell.bash hook)" && conda activate tikspyder && \
-  cd "$TIKSPYDER_DIR" && tikspyder --tag hashtag --apify \
+cd "$TIKSPYDER_DIR" && tikspyder --tag hashtag --apify \
   --after 2025-01-01 --oldest-post-date 2025-01-01 \
   --number-of-results 50 --output ./data/ --download
 ```
+
+Remember to prepend the conda or venv activation before `cd` if needed.
 
 Run the command and let the user see the output. Use a generous timeout (up to 10 minutes) since data collection can take a while depending on the search scope.
 
@@ -372,7 +340,6 @@ The command may exit with errors even when data was partially collected. Check t
 After the command finishes, inspect the output directory and summarize what was collected:
 
 ```bash
-# Count output files
 find <output_dir> -type f | head -50
 ls -la <output_dir>/*.csv 2>/dev/null
 ls <output_dir>/downloaded_videos/ 2>/dev/null | wc -l
@@ -395,6 +362,8 @@ If the user says they'd prefer a visual interface, or if they seem unsure about 
 
 Make sure environment and API keys are configured (Phases 1-2) before launching.
 
+Activate the environment (conda or venv, same as Phase 4), then run:
+
 ```bash
 cd "$TIKSPYDER_DIR" && tikspyder --app
 ```
@@ -402,32 +371,9 @@ cd "$TIKSPYDER_DIR" && tikspyder --app
 This starts a local web server at `http://localhost:8501`. Tell the user:
 - "I've launched the TikSpyder web interface. It should open in your browser at http://localhost:8501"
 - "The web interface lets you configure searches, set download options, and track progress visually"
-- "Press Ctrl+C in the terminal when you're done to stop the server"
+- "When you're done, come back and tell me — I'll stop the server"
 
-The Streamlit app runs as a blocking process. To keep the conversation going while it runs, launch it in the background:
-
-```bash
-cd "$TIKSPYDER_DIR" && nohup tikspyder --app > /dev/null 2>&1 &
-echo "Streamlit PID: $!"
-```
-
-Tell the user the PID so they (or you) can stop it later.
-
-**Stopping Streamlit:** `tikspyder --app` spawns Streamlit as a child process, so killing just the parent PID won't stop the server. You need to kill the whole process tree. Use this approach:
-
-```bash
-# Kill the parent and all child processes
-kill $PID 2>/dev/null
-# Also find and kill any remaining streamlit processes on port 8501
-lsof -ti:8501 2>/dev/null | xargs kill 2>/dev/null || \
-  netstat -tlnp 2>/dev/null | grep 8501 | awk '{print $7}' | cut -d'/' -f1 | xargs kill 2>/dev/null
-echo "Streamlit server stopped"
-```
-
-On Windows (Git Bash), `lsof` may not be available. Fall back to:
-```bash
-netstat -ano | grep 8501 | awk '{print $5}' | head -1 | xargs taskkill //PID //F 2>/dev/null
-```
+The Streamlit app runs as a blocking process. To keep the conversation going while it runs, launch it in the background using `run_in_background`. When the user is done, find and stop the process listening on port 8501.
 
 ---
 
@@ -451,7 +397,6 @@ netstat -ano | grep 8501 | awk '{print $5}' | head -1 | xargs taskkill //PID //F
 | `--oldest-post-date` | string | Apify: oldest post date (YYYY-MM-DD) |
 | `--newest-post-date` | string | Apify: newest post date (YYYY-MM-DD) |
 | `--number-of-results` | int | Apify: max results (default: 25) |
-| `--use-tor` | flag | Route downloads through Tor |
 | `-d, --download` | flag | Download video files |
 | `-w, --max-workers` | int | Thread count for downloads |
 | `-o, --output` | string | Output directory path |

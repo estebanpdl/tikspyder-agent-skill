@@ -143,24 +143,49 @@ Tell the user which environment type was set up (conda or venv) so they know for
 ffmpeg -version 2>&1 | head -1
 ```
 
-ffmpeg is required for video processing and keyframe extraction. If missing, warn the user: "ffmpeg is not installed. Video downloads will still work, but keyframe extraction will fail. You can install it from https://ffmpeg.org/download.html."
+ffmpeg is needed for audio extraction and keyframe extraction. If missing, tell the user clearly what they'll lose and ask whether to proceed:
 
-### 1.7 Summary to user
+- "ffmpeg is not installed. Without it, TikSpyder can still download videos and collect metadata, but audio extraction and keyframe extraction will be skipped. You can install it from https://ffmpeg.org/download.html. Would you like to proceed without ffmpeg, or install it first?"
 
-Tell the user what you found — Python version, ffmpeg status, tikspyder installation status, where the repo lives — in a short summary. If everything is ready, move to Phase 2.
+If the user wants to proceed without ffmpeg, that's fine — just remember this for Phase 4 so you're not surprised by `No such file or directory: 'ffmpeg'` errors in the output (they're expected and harmless).
+
+### 1.7 Summary and readiness check (STOP HERE before continuing)
+
+Before moving to Phase 2, present a readiness report and wait for user confirmation. Do NOT proceed until the user says it's OK. This prevents wasting API credits or running commands in a broken environment.
+
+Show something like:
+
+```
+Environment readiness:
+- Python: 3.12 (OK)
+- TikSpyder: v0.1.0 installed (conda env: tikspyder)
+- ffmpeg: not installed (audio extraction and keyframes will be skipped)
+
+Ready to continue with API key setup?
+```
+
+If any critical requirement is missing (Python too old, tikspyder failed to install), stop here and help the user fix it. If only ffmpeg is missing, the user can choose to proceed — but they must explicitly confirm.
 
 ---
 
 ## Phase 2: API Key Configuration
 
-TikSpyder uses two external APIs. Both are optional depending on what the user wants to do:
+TikSpyder uses two external APIs:
 
-- **SerpAPI** — powers keyword searches (Google-based TikTok search). Needed for `--q` searches.
-- **Apify** — powers direct TikTok profile and hashtag scraping. Needed for `--user` and `--tag` modes.
+- **SerpAPI** — powers Google-based TikTok search (Google search results + Google Images thumbnails)
+- **Apify** — powers direct TikTok profile and hashtag scraping
+
+**Important:** TikSpyder runs SerpAPI calls in ALL modes — even `--user` and `--tag` modes trigger Google search and Google Images calls before the Apify scrape. Without a valid SerpAPI key, those calls will fail with 401 errors. The Apify scrape will still work, but data collection will be incomplete. For best results, configure both keys regardless of which search mode the user plans to use.
 
 ### 2.1 Check existing keys
 
-Read the config file at `$TIKSPYDER_DIR/config/config.ini` and check whether both `api_key` and `apify_token` have non-empty values (not just the placeholder text).
+Read the config file at `$TIKSPYDER_DIR/config/config.ini` using the Read tool. Check whether `api_key` and `apify_token` contain real credentials.
+
+**A key is NOT valid if it:**
+- Is empty or whitespace
+- Contains the word `your` (e.g., `your_serp_api_key`, `your_apify_token`)
+- Is literally `<the_key>` or `<the_token>`
+- Is shorter than 20 characters (real API keys are longer)
 
 **Security rules:**
 - NEVER print, display, or echo API keys back to the user
@@ -169,12 +194,16 @@ Read the config file at `$TIKSPYDER_DIR/config/config.ini` and check whether bot
 
 ### 2.2 Ask for missing keys
 
-If either key is missing or empty, ask the user to provide it. Explain what each API is for:
+If either key is invalid, ask the user for it. Ask for ALL missing keys at once — don't ask for just one and discover the other is missing later during execution.
 
-- "**SerpAPI key** — This lets TikSpyder search Google for TikTok content. You can get one at https://serpapi.com/ (they have a free tier). You need this for keyword searches."
-- "**Apify token** — This lets TikSpyder scrape TikTok profiles and hashtags directly. You can get one at https://apify.com/ (they have a free tier). You need this for user profile and hashtag searches."
+Explain what each API is for:
 
-If the user only plans to do keyword searches, they only need SerpAPI. If they only want profile/hashtag scraping, they only need Apify (though SerpAPI is still used for the Google search component).
+- "**SerpAPI key** — This lets TikSpyder search Google for TikTok content. You can get one at https://serpapi.com/ (they have a free tier)."
+- "**Apify token** — This lets TikSpyder scrape TikTok profiles and hashtags directly. You can get one at https://apify.com/ (they have a free tier). Required for user profile and hashtag searches."
+
+If the user can only provide one key, that's OK — explain what will and won't work:
+- SerpAPI only: keyword searches work fully; user/hashtag modes will fail
+- Apify only: user/hashtag scraping works but Google search/images steps will show 401 errors (data collection still succeeds via Apify, just with incomplete results)
 
 ### 2.3 Save keys
 
@@ -319,13 +348,22 @@ Run the command and let the user see the output. Use a generous timeout (up to 1
 
 ### 4.3 Error handling
 
-Common issues and what to tell the user:
+The command may exit with errors even when data was partially collected. Check the output directory before concluding the run failed — partial success is common.
+
+**Expected noise (not errors):**
+
+| Output | Explanation |
+|--------|-------------|
+| `Error extracting audio: No such file or directory: 'ffmpeg'` | ffmpeg not installed — videos are still downloaded, only audio extraction is skipped. Harmless if user chose to proceed without ffmpeg in Phase 1. |
+
+**Errors that need action:**
 
 | Error | Likely cause | Fix |
 |-------|-------------|-----|
 | `ValueError: Either --user, --q or --tag must be provided` | Missing search term | Ask what they want to search |
-| `serpapi` authentication error | Bad SerpAPI key | Ask user to check their key at https://serpapi.com/dashboard |
-| `apify_client` error | Bad Apify token or insufficient credits | Check token at https://console.apify.com/account |
+| `401 Client Error: Unauthorized` from serpapi.com | SerpAPI key is invalid or still a placeholder | This should NOT happen — it means Phase 2 failed to detect an invalid key. Ask the user for the correct key, save it, and rerun. Review Phase 2.1 validation rules to understand what went wrong. |
+| `IndexError: list index out of range` in `sql_manager.py` | SerpAPI returned no data, leaving the SQL database empty | This is a downstream symptom of a bad SerpAPI key. Same fix as above. |
+| `ApifyApiError: User was not found or authentication token is not valid` | Bad Apify token | Ask user to check their token at https://console.apify.com/account |
 | `RuntimeError` with asyncio | Event loop conflict | Run `cd "$TIKSPYDER_DIR" && git pull` to get the latest fix |
 | Connection/timeout errors | Network issues | Suggest checking internet connection, or trying with fewer results |
 

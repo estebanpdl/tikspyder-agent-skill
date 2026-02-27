@@ -23,13 +23,7 @@ This skill wraps [TikSpyder](https://github.com/estebanpdl/tik-spyder), an OSINT
 
 ## Installation
 
-### Option 1: Install using `npx`
-
-```
-npx skills add https://github.com/estebanpdl/tikspyder-agent-skill --skill tikspyder
-```
-
-### Option 2: Clone as a plugin
+### Option 1: Clone as a plugin (recommended)
 
 ```bash
 # User-level (available across all your projects)
@@ -37,6 +31,14 @@ git clone https://github.com/estebanpdl/tikspyder-agent-skill.git ~/.claude/plug
 
 # Or project-level (available only in one project)
 git clone https://github.com/estebanpdl/tikspyder-agent-skill.git .claude/plugins/tikspyder-agent-skill
+```
+
+### Option 2: Install from a marketplace
+
+If a marketplace has this plugin listed:
+
+```
+/plugin install tikspyder-agent-skill@<marketplace-name>
 ```
 
 Restart Claude Code after installing. The skill will be available immediately.
@@ -86,6 +88,20 @@ Depending on your search parameters, TikSpyder outputs:
 | Keyword search | Searches Google for TikTok content matching your query | SerpAPI |
 | User profile | Scrapes videos from a specific TikTok account | SerpAPI + Apify |
 | Hashtag | Scrapes videos with a specific hashtag | SerpAPI + Apify |
+
+## Security scan notice
+
+When installing this skill, automated security scanners may flag it with alerts. This is expected and worth explaining.
+
+This skill instructs an AI agent to perform operations that are inherently part of setting up and running a data collection tool:
+
+- **Cloning a repository and installing packages** — On first run, the skill downloads TikSpyder from its [official GitHub repository](https://github.com/estebanpdl/tik-spyder) and installs it via pip. Security scanners flag this as a supply chain risk because it involves fetching and executing external code. This is how Python tools are distributed and installed.
+- **Handling API credentials** — The skill reads and writes API keys to a local configuration file. Scanners flag credential handling. The skill never transmits, logs, or displays these keys — they are stored locally in `config/config.ini` within the TikSpyder directory.
+- **Shell environment activation** — Conda and venv activation requires shell-level commands that scanners may flag as potentially unsafe patterns. These are standard Python environment management operations.
+
+These patterns are not unique to this skill — they are common to any tool that automates the setup and execution of a command-line application. The skill contains no obfuscated code, no network calls beyond what TikSpyder itself makes to SerpAPI and Apify, and no operations that aren't visible to the user through Claude Code's permission system.
+
+You can review the full skill instructions in [`skills/tikspyder/SKILL.md`](skills/tikspyder/SKILL.md).
 
 ## License
 

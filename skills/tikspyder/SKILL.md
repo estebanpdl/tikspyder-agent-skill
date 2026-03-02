@@ -1,6 +1,6 @@
 ---
 name: tikspyder
-description: Run the TikSpyder tool to collect TikTok data — search by keyword, username, or hashtag download videos, extract keyframes, and export structured data. Use this skill whenever the user wants to collect TikTok data, search TikTok profiles or hashtags, search TikTok videos, download TikTok content, run tikspyder, or launch the TikSpyder Streamlit interface. Also trigger when the user mentions data collection from TikTok, even if they don't say "tikspyder" by name.
+description: Run the TikSpyder tool to collect TikTok data — search by keyword, username, or hashtag, download videos, extract keyframes, and export structured data. Use this skill whenever the user wants to collect TikTok data, search TikTok profiles or hashtags, search TikTok videos, download TikTok content, run tikspyder, or launch the TikSpyder Streamlit interface. Also trigger when the user mentions data collection from TikTok, even if they don't say "tikspyder" by name.
 ---
 
 # TikSpyder — Guided TikTok Data Collection
@@ -27,6 +27,27 @@ conda_init="eval \"\$(conda shell.bash hook)\"" && $conda_init && conda activate
 ```
 
 Bare `conda activate` will fail in non-interactive shells. Always use the full pattern above. This applies to Phase 1, Phase 4, and Phase 5.
+
+### 1.0 Check for cached environment (fast path)
+
+After a successful run, the skill saves environment details to `.tikspyder-env.json` inside the skill directory. If this file exists, read it — it contains everything you need to skip most of Phase 1:
+
+```bash
+for candidate in .claude/skills/tikspyder "$HOME/.claude/skills/tikspyder"; do
+  if [ -f "$candidate/.tikspyder-env.json" ]; then
+    cat "$candidate/.tikspyder-env.json"
+    break
+  fi
+done
+```
+
+If the file exists and contains valid data, use the cached values directly:
+- Set SKILL_DIR, TIKSPYDER_DIR, env_type, and ffmpeg status from the cached data
+- Do a quick sanity check: verify that TIKSPYDER_DIR still exists and `tikspyder --help` works (after activating the cached environment)
+- If the sanity check passes, skip to **Phase 1.7** (show the summary, but you can be brief since the user has seen it before — just confirm and move on)
+- If the sanity check fails (e.g., the directory was moved or env was deleted), delete the cache file and fall through to the full Phase 1
+
+This saves significant time on repeat runs — no searching, no probing, no conda env listing.
 
 ### 1.1 Find the skill directory
 
@@ -353,6 +374,30 @@ Report to the user:
 - Number of keyframes extracted (if applicable)
 - Total size of the output directory
 - Path to the main CSV file(s) they can open in Excel or Google Sheets
+
+### 4.5 Save environment cache (after successful run)
+
+After a successful run (data was collected, output directory has files), save the resolved environment details so the next session can skip Phase 1 discovery. Write a JSON file at `$SKILL_DIR/.tikspyder-env.json`:
+
+```json
+{
+  "tikspyder_dir": "/absolute/path/to/tik-spyder",
+  "skill_dir": "/absolute/path/to/skill/directory",
+  "env_type": "conda",
+  "env_name": "tikspyder",
+  "python_version": "3.12.1",
+  "ffmpeg_available": false,
+  "api_keys_configured": true,
+  "last_successful_run": "2026-02-27"
+}
+```
+
+- `env_type` should be `"conda"` or `"venv"`
+- `env_name` is the conda environment name (only relevant for conda)
+- Use absolute paths so the cache works regardless of the working directory
+- Only write this file after a confirmed successful run — never after errors
+
+If the file already exists, update it (the paths or ffmpeg status may have changed).
 
 ---
 

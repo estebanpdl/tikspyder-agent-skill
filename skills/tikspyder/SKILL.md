@@ -20,13 +20,15 @@ Before anything else, find (or install) TikSpyder and verify the environment is 
 
 ### Conda activation note
 
-Throughout this skill, whenever you need to activate a conda environment in a bash command, you must initialize the shell hook first. The pattern is:
+Throughout this skill, whenever you need to activate a conda environment, run:
 
 ```bash
-conda_init="eval \"\$(conda shell.bash hook)\"" && $conda_init && conda activate tikspyder
+eval "$(conda shell.bash hook)" && conda activate tikspyder
 ```
 
-Bare `conda activate` will fail in non-interactive shells. Always use the full pattern above. This applies to Phase 1, Phase 4, and Phase 5.
+This works on macOS, Linux, and Windows (Git Bash / miniforge). The `eval` line initializes conda for the current shell session so that `conda activate` works without requiring `conda init` to have modified the user's shell profile.
+
+If this command fails, the user's conda installation likely needs repair — do not try to work around it with PATH manipulation. Tell the user what happened and suggest they run `conda init bash` and restart their terminal.
 
 ### 1.0 Check for cached environment (fast path)
 
@@ -43,11 +45,12 @@ done
 
 If the file exists and contains valid data, use the cached values directly:
 - Set SKILL_DIR, TIKSPYDER_DIR, env_type, and ffmpeg status from the cached data
-- Do a quick sanity check: verify that TIKSPYDER_DIR still exists and `tikspyder --help` works (after activating the cached environment)
+- Activate the environment using the cached `env_type`: if conda, use the standard conda activation command; if venv, source the activate script
+- Do a quick sanity check: verify that TIKSPYDER_DIR still exists and `tikspyder --help` works after activation
 - If the sanity check passes, skip to **Phase 1.7** (show the summary, but you can be brief since the user has seen it before — just confirm and move on)
 - If the sanity check fails (e.g., the directory was moved or env was deleted), delete the cache file and fall through to the full Phase 1
 
-This saves significant time on repeat runs — no searching, no probing, no conda env listing.
+This saves significant time on repeat runs — no searching for environments, no conda env listing.
 
 ### 1.1 Find the skill directory
 
@@ -84,13 +87,33 @@ conda env list 2>/dev/null | grep tikspyder
 
 If a `tikspyder` environment exists, activate it (using the conda pattern from above) and run `pip show tikspyder` again. If found, use that environment for all subsequent commands.
 
-**Step C — Check if repo is already cloned in the skill directory:**
+**Step C — Check for an existing venv with tikspyder:**
+
+Look for a venv in common locations where the user may have cloned and installed tikspyder:
+
+```bash
+for candidate in "$SKILL_DIR/tik-spyder" "$HOME/tik-spyder" "./tik-spyder"; do
+  for venv_dir in ".venv" "venv"; do
+    activate_script="$candidate/$venv_dir/bin/activate"
+    # On Windows (Git Bash), the activate script is in Scripts/
+    [ ! -f "$activate_script" ] && activate_script="$candidate/$venv_dir/Scripts/activate"
+    if [ -f "$activate_script" ]; then
+      echo "Found venv at $candidate/$venv_dir"
+      break 2
+    fi
+  done
+done
+```
+
+If found, activate the venv with `source "$activate_script"`, then run `pip show tikspyder`. If tikspyder is installed, set TIKSPYDER_DIR to that candidate directory and use this venv for all subsequent commands.
+
+**Step D — Check if repo is already cloned in the skill directory (without an environment):**
 
 ```bash
 ls "$SKILL_DIR/tik-spyder/main.py" 2>/dev/null
 ```
 
-If found, set `TIKSPYDER_DIR=$SKILL_DIR/tik-spyder`.
+If found, set `TIKSPYDER_DIR=$SKILL_DIR/tik-spyder`. The environment will be created in Phase 1.5.
 
 ### 1.3 Download and install if needed
 
@@ -113,7 +136,7 @@ TikSpyder needs Python 3.11 or newer. If the version is too old, tell the user a
 
 ### 1.5 Create environment and install (only if tikspyder wasn't found in 1.2)
 
-If tikspyder is already installed (found in Step A or B), skip this entirely.
+If tikspyder is already installed (found in Step A, B, or C), skip this entirely.
 
 Otherwise, create an environment and install. First check whether conda/mamba is available:
 
